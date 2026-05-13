@@ -59,11 +59,22 @@ if "selected_endpoint" not in st.session_state:
 # LLM client builder
 # ---------------------------------------------------------------------------
 def get_llm_client() -> OpenAI:
-    """Build an OpenAI-compatible client pointed at the Databricks AI Gateway."""
+    """Build an OpenAI-compatible client pointed at the Databricks AI Gateway.
+
+    Auth resolution order:
+      1. ``DATABRICKS_TOKEN`` env var (used for local dev)
+      2. Databricks SDK auth — picks up the service principal OAuth M2M
+         credentials that Databricks Apps inject as
+         ``DATABRICKS_HOST`` + ``DATABRICKS_CLIENT_ID`` + ``DATABRICKS_CLIENT_SECRET``
+    """
     token = os.environ.get("DATABRICKS_TOKEN")
     if not token:
-        # Inside a Databricks App the service principal token is exposed here
-        token = os.environ.get("DATABRICKS_CLIENT_TOKEN", "")
+        from databricks.sdk import WorkspaceClient
+
+        w = WorkspaceClient()
+        # `authenticate()` returns a {"Authorization": "Bearer …"} header pair
+        auth_headers = w.config.authenticate()
+        token = auth_headers.get("Authorization", "").replace("Bearer ", "")
     return OpenAI(api_key=token, base_url=config.base_url)
 
 

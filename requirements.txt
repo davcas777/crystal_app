@@ -2,3 +2,4 @@ streamlit==1.39.0
 openai>=1.51.0
 pypdf>=4.3.0
 python-docx>=1.1.2
+databricks-sdk>=0.40.0
