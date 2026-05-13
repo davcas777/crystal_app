@@ -1,74 +1,74 @@
-# Crystal — AI Gateway Frontend
+# Crystal — Frontend de AI Gateway
 
-A branded **Databricks App** that gives Crystal employees a single chat interface in front of the AI Gateway endpoints (`gpt`, `claude`, or any others you register). Each user gets their own conversation history, can swap between endpoints from a menu, and can attach PDFs, Word documents, text files, or images for the model to analyze.
+Una **Databricks App** con la imagen corporativa de Crystal que le da a los empleados una sola interfaz de chat para consumir los endpoints del AI Gateway (`gpt`, `claude` o cualquier otro que registren). Cada usuario tiene su propio historial de conversaciones, puede cambiar de endpoint desde un menú lateral y puede adjuntar PDFs, documentos de Word, archivos de texto o imágenes para que el modelo los analice.
 
-Built on **Streamlit** + the OpenAI-compatible Databricks AI Gateway API. Cloneable, parameterized, and deploys with one CLI command.
+Construida con **Streamlit** + la API compatible con OpenAI del Databricks AI Gateway. Lista para clonar, parametrizada y se despliega con un único comando del CLI.
 
 ---
 
-## Features
+## Funcionalidades
 
 | | |
 |---|---|
-| Endpoint picker | Sidebar dropdown of every endpoint listed in `app.yaml` (no code changes to add new ones) |
-| File attachments | PDF, Word (`.docx`), text/CSV/Markdown, and images (PNG/JPG/WebP/GIF). Text is inlined; images go to vision-capable models via the OpenAI multimodal schema |
-| Per-user chat history | Stored in SQLite keyed by the user's email (`X-Forwarded-Email`). Each user can start, rename, switch between, and delete multiple conversations |
-| Crystal branding | Logo, color palette (black + red), and the *“Tejemos vida para nuestro planeta”* tagline |
-| Streaming responses | Tokens stream live into the chat panel |
-| Fully parameterized | Base URL, endpoint list, max tokens, and history path all come from environment variables in `app.yaml` |
+| Selector de modelo | Menú lateral con todos los endpoints listados en `app.yaml` (no requiere cambios de código para agregar nuevos) |
+| Archivos adjuntos | PDF, Word (`.docx`), texto / CSV / Markdown e imágenes (PNG / JPG / WebP / GIF). El texto se inserta en el prompt; las imágenes se envían a los modelos multimodales con el esquema de visión de OpenAI |
+| Historial por usuario | Almacenado en SQLite e indexado por el correo del usuario (`X-Forwarded-Email`). Cada usuario puede crear, renombrar, alternar y borrar múltiples conversaciones |
+| Imagen de Crystal | Logo, paleta corporativa (negro + rojo) y el lema *"Tejemos vida para nuestro planeta"* |
+| Respuestas en streaming | Los tokens se imprimen en vivo en el panel de chat |
+| 100% parametrizada | URL base, lista de endpoints, máximo de tokens y ruta del historial vienen de variables de entorno en `app.yaml` |
 
 ---
 
-## Repository layout
+## Estructura del repositorio
 
 ```
 crystal_app/
-├── app.py                  ← Streamlit entry point
-├── app.yaml                ← Databricks Apps config (env vars live here)
+├── app.py                  ← Punto de entrada de Streamlit
+├── app.yaml                ← Configuración de Databricks Apps (variables de entorno)
 ├── requirements.txt
 ├── README.md
 ├── .env.example
 ├── .gitignore
 ├── .streamlit/
-│   └── config.toml         ← Streamlit theme
+│   └── config.toml         ← Tema visual de Streamlit
 ├── static/
-│   ├── logo.png            ← Crystal logo (drop-in replacement OK)
-│   └── styles.css          ← Brand CSS
+│   ├── logo.png            ← Logo de Crystal (reemplazable)
+│   └── styles.css          ← CSS de marca
 └── utils/
-    ├── auth.py             ← Reads the authenticated user from Databricks headers
-    ├── chat_history.py     ← SQLite-backed conversation store
-    ├── config.py           ← Env-var driven configuration
-    └── file_handler.py     ← PDF / Word / text / image extraction
+    ├── auth.py             ← Lee al usuario autenticado desde los headers de Databricks
+    ├── chat_history.py     ← Persistencia de conversaciones en SQLite
+    ├── config.py           ← Configuración basada en variables de entorno
+    └── file_handler.py     ← Extracción de contenido de PDF / Word / texto / imagen
 ```
 
 ---
 
-## Deploy in your own Databricks workspace
+## Despliegue en su propio workspace de Databricks
 
-### 1. Clone the repo
+### 1. Clonar el repositorio
 
 ```bash
 git clone https://github.com/davcas777/crystal_app.git
 cd crystal_app
 ```
 
-### 2. Edit `app.yaml` with your own AI Gateway
+### 2. Editar `app.yaml` con su AI Gateway
 
-Open `app.yaml` and update the two fields that point at your workspace:
+Abra `app.yaml` y actualice los dos campos que apuntan a su workspace:
 
 ```yaml
 env:
   - name: AI_GATEWAY_BASE_URL
-    value: "https://<YOUR-WORKSPACE>.azuredatabricks.net/ai-gateway/mlflow/v1"
+    value: "https://<SU-WORKSPACE>.azuredatabricks.net/ai-gateway/mlflow/v1"
 
   - name: AI_GATEWAY_ENDPOINTS
     value: '[{"name":"gpt","label":"OpenAI GPT"},{"name":"claude","label":"Anthropic Claude"}]'
 ```
 
-You can pass endpoints two ways:
+Los endpoints aceptan dos formatos:
 
-- **Short form** — just names: `gpt,claude,llama-3`
-- **Full form** — JSON array with display labels (recommended for end users):
+- **Formato corto** — solo nombres: `gpt,claude,llama-3`
+- **Formato completo** — arreglo JSON con etiquetas de visualización (recomendado para usuarios finales):
   ```json
   [
     {"name": "gpt",    "label": "OpenAI GPT"},
@@ -76,105 +76,105 @@ You can pass endpoints two ways:
   ]
   ```
 
-The `name` must match the endpoint name registered in your AI Gateway exactly.
+El campo `name` debe coincidir exactamente con el nombre del endpoint registrado en el AI Gateway.
 
-### 3. (Optional) Replace the logo
+### 3. (Opcional) Cambiar el logo
 
-Drop your own `static/logo.png` in (any reasonable size; the sidebar renders it at 160 px wide).
+Reemplace `static/logo.png` con la versión que prefiera (cualquier tamaño razonable; la barra lateral lo renderiza a 160 px de ancho).
 
-### 4. Create and deploy the app via the Databricks CLI
+### 4. Crear y desplegar la app con el CLI de Databricks
 
-Install / authenticate the CLI once:
+Instale y autentíquese una sola vez:
 
 ```bash
 pip install databricks-cli
-databricks auth login --host https://<YOUR-WORKSPACE>.azuredatabricks.net
+databricks auth login --host https://<SU-WORKSPACE>.azuredatabricks.net
 ```
 
-Sync the code to a workspace folder and create + deploy the app:
+Suba el código a una carpeta del workspace y cree + despliegue la app:
 
 ```bash
-# 1. Sync source to your workspace
-databricks workspace import-dir . /Workspace/Users/<you@crystal.com.co>/crystal_app --overwrite
+# 1. Subir el código al workspace
+databricks workspace import-dir . /Workspace/Users/<usted@crystal.com.co>/crystal_app --overwrite
 
-# 2. Create the app (once)
+# 2. Crear la app (una sola vez)
 databricks apps create crystal-ai-assistant \
-  --description "Crystal AI Assistant — front-end for the AI Gateway"
+  --description "Crystal AI Assistant — frontend del AI Gateway"
 
-# 3. Deploy the synced code
+# 3. Desplegar el código sincronizado
 databricks apps deploy crystal-ai-assistant \
-  --source-code-path /Workspace/Users/<you@crystal.com.co>/crystal_app
+  --source-code-path /Workspace/Users/<usted@crystal.com.co>/crystal_app
 ```
 
-The CLI returns the live URL once the build finishes (typically 2–4 minutes).
+El CLI devuelve la URL pública cuando el build termina (2 a 4 minutos típicamente).
 
-### 5. Grant the app permission to call the AI Gateway
+### 5. Otorgarle permisos a la app sobre el AI Gateway
 
-The app runs as a **service principal** automatically created when you provision it. That principal needs `CAN_QUERY` on each serving endpoint exposed through the gateway:
+La app corre con un **service principal** que Databricks crea automáticamente al provisionarla. Ese service principal necesita el permiso `CAN_QUERY` sobre cada endpoint de serving que se exponga a través del gateway:
 
-- Workspace UI → **Serving** → select endpoint → **Permissions** → add the app's service principal with **Can Query**.
+- Workspace UI → **Serving** → seleccionar el endpoint → **Permissions** → agregar el service principal de la app con **Can Query**.
 
-The app reads the principal's bearer token from the `DATABRICKS_CLIENT_TOKEN` env var Databricks Apps injects at runtime — no PAT required in production.
+En producción la app lee el token del service principal desde la variable `DATABRICKS_CLIENT_TOKEN` que Databricks Apps inyecta automáticamente — no se necesita un PAT.
 
 ---
 
-## Run locally (development)
+## Ejecución local (desarrollo)
 
 ```bash
-# 1. Create a venv and install deps
+# 1. Crear un entorno virtual e instalar dependencias
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# 2. Copy the env template and fill in your PAT
+# 2. Copiar la plantilla de variables y completarla con su PAT
 cp .env.example .env
-# edit .env
+# editar .env
 
-# 3. Export and run
+# 3. Exportar y ejecutar
 set -a; source .env; set +a
 streamlit run app.py
 ```
 
-For local dev the app authenticates with your personal access token (`DATABRICKS_TOKEN`) and uses `LOCAL_USER_EMAIL` as the simulated identity.
+En modo local la app se autentica con el personal access token (`DATABRICKS_TOKEN`) y usa `LOCAL_USER_EMAIL` como identidad simulada.
 
 ---
 
-## Configuration reference
+## Referencia de configuración
 
-All settings are environment variables (set in `app.yaml` for the deployed app, or in `.env` locally).
+Todas las opciones se configuran con variables de entorno (en `app.yaml` para la app desplegada o en `.env` localmente).
 
-| Variable | Required | Default | Description |
+| Variable | Requerida | Valor por defecto | Descripción |
 |---|---|---|---|
-| `AI_GATEWAY_BASE_URL` | yes | — | OpenAI-compatible base URL, ending at `/ai-gateway/mlflow/v1` |
-| `AI_GATEWAY_ENDPOINTS` | yes | `gpt,claude` | Comma-separated names or JSON array of `{name, label}` |
-| `AI_GATEWAY_MAX_TOKENS` | no | `1024` | Per-completion token cap |
-| `CHAT_HISTORY_DB_PATH` | no | `/tmp/crystal_chat_history.db` | SQLite file for chat history |
-| `DATABRICKS_TOKEN` | local only | — | PAT for local dev |
-| `LOCAL_USER_EMAIL` | local only | `anonymous@local` | Simulated user identity for local dev |
+| `AI_GATEWAY_BASE_URL` | sí | — | URL base compatible con OpenAI, debe terminar en `/ai-gateway/mlflow/v1` |
+| `AI_GATEWAY_ENDPOINTS` | sí | `gpt,claude` | Nombres separados por coma o arreglo JSON de `{name, label}` |
+| `AI_GATEWAY_MAX_TOKENS` | no | `1024` | Tope de tokens por respuesta |
+| `CHAT_HISTORY_DB_PATH` | no | `/tmp/crystal_chat_history.db` | Archivo SQLite para el historial |
+| `DATABRICKS_TOKEN` | solo local | — | PAT para desarrollo local |
+| `LOCAL_USER_EMAIL` | solo local | `anonymous@local` | Identidad simulada para desarrollo local |
 
-### Persisting chat history across restarts
+### Persistir el historial entre reinicios
 
-`/tmp` is wiped when the Databricks App pod restarts. For longer retention:
+La ruta `/tmp` se borra cuando el pod de la Databricks App se reinicia. Para retención más larga:
 
-1. **Quick:** point `CHAT_HISTORY_DB_PATH` at a mounted Databricks Volume (`/Volumes/<catalog>/<schema>/<volume>/chat.db`).
-2. **Production:** swap the SQLite store in `utils/chat_history.py` for a Delta table read/written via Databricks SQL. The store's public surface (`create_conversation`, `add_message`, `list_messages`, etc.) is small — a Delta-backed implementation is a drop-in replacement.
-
----
-
-## Adding a new endpoint
-
-1. Provision the endpoint in your AI Gateway (any model behind any provider — OpenAI, Anthropic, Bedrock, OSS).
-2. Grant the app's service principal `CAN_QUERY`.
-3. Add it to `AI_GATEWAY_ENDPOINTS` in `app.yaml`.
-4. `databricks apps deploy …` again.
-
-That's it — the sidebar picker picks it up automatically.
+1. **Rápido:** apuntar `CHAT_HISTORY_DB_PATH` a un Volumen de Databricks montado (`/Volumes/<catalog>/<schema>/<volume>/chat.db`).
+2. **Producción:** reemplazar el store de SQLite en `utils/chat_history.py` por una tabla Delta consumida vía Databricks SQL. La interfaz pública del store es pequeña (`create_conversation`, `add_message`, `list_messages`, etc.) — una implementación basada en Delta es un reemplazo directo.
 
 ---
 
-## How the AI Gateway call is made
+## Agregar un nuevo endpoint
 
-The app uses the OpenAI Python SDK pointed at the Databricks AI Gateway. Equivalent of:
+1. Provisione el endpoint en el AI Gateway (cualquier modelo de cualquier proveedor — OpenAI, Anthropic, Bedrock, OSS).
+2. Otórguele `CAN_QUERY` al service principal de la app.
+3. Agréguelo a `AI_GATEWAY_ENDPOINTS` en `app.yaml`.
+4. Ejecute `databricks apps deploy …` de nuevo.
+
+Eso es todo — el selector de la barra lateral lo detecta automáticamente.
+
+---
+
+## Cómo se invoca el AI Gateway
+
+La app utiliza el SDK de OpenAI para Python apuntando al Databricks AI Gateway. Equivale a:
 
 ```python
 from openai import OpenAI
@@ -186,14 +186,14 @@ client = OpenAI(
 )
 
 resp = client.chat.completions.create(
-    model="claude",                # or "gpt", or whatever you registered
+    model="claude",                # o "gpt", o el nombre que tengan registrado
     messages=[{"role": "user", "content": "Hola Crystal"}],
     max_tokens=1024,
     stream=True,
 )
 ```
 
-For multimodal turns (image attachments), the user message becomes a content array:
+Para turnos multimodales (imagen adjunta), el mensaje del usuario se convierte en un arreglo de partes:
 
 ```python
 {
@@ -207,6 +207,6 @@ For multimodal turns (image attachments), the user message becomes a content arr
 
 ---
 
-## Support
+## Soporte
 
-Internal owner: **David Cascante Espinoza** — `david.cascante@databricks.com`
+Responsable interno: **David Cascante Espinoza** — `david.cascante@databricks.com`

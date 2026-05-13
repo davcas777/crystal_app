@@ -4,20 +4,20 @@ command:
   - app.py
 
 env:
-  # Base URL of your AI Gateway (must end at /ai-gateway/mlflow/v1)
+  # URL base de su AI Gateway (debe terminar en /ai-gateway/mlflow/v1)
   - name: AI_GATEWAY_BASE_URL
     value: "https://adb-520209755093735.15.azuredatabricks.net/ai-gateway/mlflow/v1"
 
-  # Endpoints exposed to users.  Two formats supported:
-  #   Short:  "gpt,claude"
-  #   Full:   '[{"name":"gpt","label":"OpenAI GPT"},{"name":"claude","label":"Anthropic Claude"}]'
+  # Endpoints expuestos a los usuarios. Dos formatos soportados:
+  #   Corto:    "gpt,claude"
+  #   Completo: '[{"name":"gpt","label":"OpenAI GPT"},{"name":"claude","label":"Anthropic Claude"}]'
   - name: AI_GATEWAY_ENDPOINTS
     value: '[{"name":"gpt","label":"OpenAI GPT"},{"name":"claude","label":"Anthropic Claude"}]'
 
-  # Max tokens per completion
+  # Máximo de tokens por respuesta
   - name: AI_GATEWAY_MAX_TOKENS
     value: "1024"
 
-  # Where to persist chat history (SQLite).  /tmp is per-pod ephemeral.
+  # Ruta del historial de chat (SQLite). /tmp es efímero por pod.
   - name: CHAT_HISTORY_DB_PATH
     value: "/tmp/crystal_chat_history.db"
