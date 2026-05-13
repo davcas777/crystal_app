@@ -43,7 +43,34 @@ crystal_app/
 
 ---
 
-## Despliegue en su propio workspace de Databricks
+## Despliegue rápido (un solo comando)
+
+Si ya tiene el CLI de Databricks autenticado, basta con:
+
+```bash
+git clone https://github.com/davcas777/crystal_app.git
+cd crystal_app
+
+./scripts/deploy.sh \
+  --host  https://<SU-WORKSPACE>.azuredatabricks.net \
+  --user  usted@crystal.com.co \
+  --app   crystal-ai-assistant \
+  --endpoints gpt,claude
+```
+
+El script hace todo:
+
+1. Sincroniza el código al workspace
+2. Crea la app (si no existe)
+3. Resuelve el service principal de la app y le otorga `CAN_QUERY` sobre cada endpoint del AI Gateway que liste en `--endpoints`
+4. Despliega el código
+5. Imprime la URL pública
+
+Si prefiere hacerlo a mano, siga los pasos detallados abajo.
+
+---
+
+## Despliegue manual paso a paso
 
 ### 1. Clonar el repositorio
 
@@ -108,13 +135,39 @@ databricks apps deploy crystal-ai-assistant \
 
 El CLI devuelve la URL pública cuando el build termina (2 a 4 minutos típicamente).
 
-### 5. Otorgarle permisos a la app sobre el AI Gateway
+### 5. Otorgarle permisos a la app sobre los endpoints del AI Gateway
 
-La app corre con un **service principal** que Databricks crea automáticamente al provisionarla. Ese service principal necesita el permiso `CAN_QUERY` sobre cada endpoint de serving que se exponga a través del gateway:
+> **Importante:** los endpoints registrados en el **AI Gateway** (los que se consumen vía `/ai-gateway/mlflow/v1/chat/completions`) son un tipo de objeto distinto a los *Model Serving Endpoints* normales. No los encontrará en *Serving* — están bajo **Settings → AI Gateway → Endpoints**. Los permisos se manejan por separado.
 
-- Workspace UI → **Serving** → seleccionar el endpoint → **Permissions** → agregar el service principal de la app con **Can Query**.
+Al crearse la app, Databricks le asigna un **service principal** propio (lo verá en la salida de `databricks apps get crystal-ai-assistant` en el campo `service_principal_client_id`). Ese SP necesita `CAN_QUERY` sobre cada endpoint del AI Gateway que la app vaya a usar.
 
-En producción la app lee el token del service principal desde la variable `DATABRICKS_CLIENT_TOKEN` que Databricks Apps inyecta automáticamente — no se necesita un PAT.
+#### Opción A — UI (recomendado)
+
+1. Workspace UI → **Serving** (menú lateral) → pestaña **AI Gateway** (o ir directamente a `https://<workspace>/ml/aigateway`).
+2. Click en el endpoint (`gpt`, `claude`, etc.) → botón **Permissions**.
+3. **Add permissions** → buscar el service principal por nombre (algo como `app-xxxxxx crystal-ai-assistant`) → asignar **Can Query** → **Save**.
+4. Repetir para cada endpoint expuesto en `AI_GATEWAY_ENDPOINTS`.
+
+#### Opción B — REST API / curl (para automatizar)
+
+```bash
+SP="<service_principal_client_id de la app>"
+HOST="https://<su-workspace>.azuredatabricks.net"
+TOKEN=$(databricks auth token --profile DEFAULT | jq -r .access_token)
+
+for ep in gpt claude; do
+  curl -X PATCH "$HOST/api/2.0/permissions/ai-gateway-endpoints/$ep" \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "{\"access_control_list\":[{\"service_principal_name\":\"$SP\",\"permission_level\":\"CAN_QUERY\"}]}"
+done
+```
+
+El object_type es `ai-gateway-endpoints` (con guiones) — **no** es `serving-endpoints`. Si intenta el path de serving endpoints obtendrá `RESOURCE_DOES_NOT_EXIST`.
+
+#### Autenticación dentro de la app
+
+En tiempo de ejecución la app **no usa PAT**. Databricks Apps inyecta `DATABRICKS_HOST`, `DATABRICKS_CLIENT_ID` y `DATABRICKS_CLIENT_SECRET`, y la app usa el SDK de Databricks (`WorkspaceClient`) para conseguir un bearer token OAuth fresco en cada llamada al AI Gateway. Esto está implementado en `app.py` → `get_llm_client()`.
 
 ---
 
@@ -204,6 +257,36 @@ Para turnos multimodales (imagen adjunta), el mensaje del usuario se convierte e
   ]
 }
 ```
+
+---
+
+## Troubleshooting
+
+### `Missing credentials. Please pass an api_key…`
+La app no encontró un bearer token. Causas típicas:
+
+- Está ejecutando en local sin `DATABRICKS_TOKEN` en el `.env`.
+- En la Databricks App, el SDK no logró autenticarse con OAuth M2M (revise que el SP tenga `Can Use` sobre el workspace y que las variables `DATABRICKS_CLIENT_ID` / `DATABRICKS_CLIENT_SECRET` estén disponibles — ambas se inyectan automáticamente, pero pueden faltar si la app está en un estado raro; redepliegue con `databricks apps deploy …`).
+
+### `403 PERMISSION_DENIED — Doesn't have permission to query AI Gateway endpoint 'X'`
+El service principal de la app no tiene `CAN_QUERY` sobre el endpoint del AI Gateway. Aplique los permisos como se describe en **Paso 5 — Otorgarle permisos a la app sobre los endpoints del AI Gateway**, o vuelva a correr `./scripts/deploy.sh`.
+
+### `list index out of range` durante el streaming
+Pasaba en versiones anteriores cuando el proveedor (ej. el endpoint `gpt`) emitía un chunk final con `choices: []` (solo estadísticas de uso). Ya está corregido en `app.py`. Si reaparece con un proveedor nuevo, la condición está en `for chunk in stream:` — sólo agregue su variante de chunk vacío al guard.
+
+### El selector solo muestra un modelo
+Su variable `AI_GATEWAY_ENDPOINTS` en `app.yaml` no quedó como JSON o como lista separada por comas. Use exactamente uno de:
+
+```yaml
+value: "gpt,claude"
+```
+o
+```yaml
+value: '[{"name":"gpt","label":"OpenAI GPT"},{"name":"claude","label":"Anthropic Claude"}]'
+```
+
+### El historial se borra cada vez que reinicia la app
+Esperado — `/tmp` es efímero por pod. Cambie `CHAT_HISTORY_DB_PATH` a un Volumen de Databricks montado (`/Volumes/…/chat.db`) o reemplace el store por una tabla Delta (ver sección **Persistir el historial entre reinicios**).
 
 ---
 
