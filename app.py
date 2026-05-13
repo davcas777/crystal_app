@@ -264,7 +264,20 @@ if prompt:
                 # usage-only chunk on OpenAI-compatible streams).
                 if not getattr(chunk, "choices", None):
                     continue
-                delta = chunk.choices[0].delta.content or ""
+                delta = chunk.choices[0].delta.content
+                if not delta:
+                    continue
+                # When the gateway proxies Anthropic (or any provider that
+                # emits structured content blocks), delta may arrive as a
+                # list of dicts instead of a plain string. Flatten to text.
+                if isinstance(delta, list):
+                    delta = "".join(
+                        part.get("text", "")
+                        for part in delta
+                        if isinstance(part, dict) and part.get("type") == "text"
+                    )
+                elif not isinstance(delta, str):
+                    delta = str(delta)
                 if not delta:
                     continue
                 full_response += delta

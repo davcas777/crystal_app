@@ -274,6 +274,9 @@ El service principal de la app no tiene `CAN_QUERY` sobre el endpoint del AI Gat
 ### `list index out of range` durante el streaming
 Pasaba en versiones anteriores cuando el proveedor (ej. el endpoint `gpt`) emitía un chunk final con `choices: []` (solo estadísticas de uso). Ya está corregido en `app.py`. Si reaparece con un proveedor nuevo, la condición está en `for chunk in stream:` — sólo agregue su variante de chunk vacío al guard.
 
+### `can only concatenate str (not "list") to str`
+Pasa cuando un endpoint del AI Gateway proxia a Anthropic (u otro modelo con *content blocks*) y emite chunks de streaming con `delta.content` como **lista de bloques** en vez de string. Ya está manejado en `app.py` aplanando los bloques tipo `{"type":"text","text":"…"}`. Si aparece con un formato nuevo, extender el `isinstance(delta, list)` en el `for chunk in stream:` para cubrir el nuevo schema.
+
 ### El selector solo muestra un modelo
 Su variable `AI_GATEWAY_ENDPOINTS` en `app.yaml` no quedó como JSON o como lista separada por comas. Use exactamente uno de:
 
