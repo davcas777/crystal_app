@@ -260,7 +260,13 @@ if prompt:
                 stream=True,
             )
             for chunk in stream:
+                # Some providers emit chunks with no choices (e.g. final
+                # usage-only chunk on OpenAI-compatible streams).
+                if not getattr(chunk, "choices", None):
+                    continue
                 delta = chunk.choices[0].delta.content or ""
+                if not delta:
+                    continue
                 full_response += delta
                 placeholder.markdown(full_response + "▌")
             placeholder.markdown(full_response)
