@@ -1,0 +1,129 @@
+/* Crystal brand styling — clean black/white with red textile-needle accent */
+
+:root {
+    --crystal-black: #000000;
+    --crystal-red: #E30613;
+    --crystal-dark: #1A1A1A;
+    --crystal-gray: #5C5C5C;
+    --crystal-light: #F4F4F4;
+    --crystal-border: #E4E4E4;
+}
+
+/* Hide the default Streamlit chrome */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header[data-testid="stHeader"] {background: transparent;}
+
+/* App background and base typography */
+.stApp {
+    background: #FFFFFF;
+    color: var(--crystal-dark);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+/* Sidebar */
+section[data-testid="stSidebar"] {
+    background: var(--crystal-light);
+    border-right: 1px solid var(--crystal-border);
+}
+section[data-testid="stSidebar"] .stMarkdown h3 {
+    color: var(--crystal-black);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.5rem;
+}
+.brand-tagline {
+    color: var(--crystal-gray);
+    font-style: italic;
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+    border-left: 3px solid var(--crystal-red);
+    padding-left: 0.6rem;
+}
+
+/* Header block */
+.app-header {
+    border-bottom: 1px solid var(--crystal-border);
+    padding-bottom: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+.app-header h1 {
+    color: var(--crystal-black);
+    font-weight: 600;
+    margin: 0;
+    font-size: 1.6rem;
+}
+.app-header h1::after {
+    content: "";
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    background: var(--crystal-red);
+    border-radius: 50%;
+    margin-left: 0.5rem;
+    vertical-align: middle;
+}
+.app-header .subtitle {
+    color: var(--crystal-gray);
+    margin: 0.2rem 0 0 0;
+    font-size: 0.95rem;
+}
+
+/* Buttons */
+.stButton > button {
+    border-radius: 6px;
+    border: 1px solid var(--crystal-border);
+    background: #FFFFFF;
+    color: var(--crystal-dark);
+    font-weight: 500;
+    transition: all 120ms ease;
+}
+.stButton > button:hover {
+    border-color: var(--crystal-black);
+    color: var(--crystal-black);
+}
+.stButton > button[kind="primary"] {
+    background: var(--crystal-black);
+    border-color: var(--crystal-black);
+    color: #FFFFFF;
+}
+.stButton > button[kind="primary"]:hover {
+    background: var(--crystal-red);
+    border-color: var(--crystal-red);
+}
+
+/* Chat messages */
+[data-testid="stChatMessage"] {
+    background: #FFFFFF;
+    border: 1px solid var(--crystal-border);
+    border-radius: 10px;
+    padding: 0.9rem 1.1rem;
+    margin-bottom: 0.65rem;
+}
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {
+    background: var(--crystal-light);
+}
+
+/* Chat input */
+[data-testid="stChatInput"] textarea {
+    border-radius: 8px;
+    border: 1px solid var(--crystal-border);
+}
+[data-testid="stChatInput"] textarea:focus {
+    border-color: var(--crystal-red);
+    box-shadow: 0 0 0 2px rgba(227, 6, 19, 0.12);
+}
+
+/* Selectbox */
+[data-baseweb="select"] > div {
+    border-radius: 6px;
+    border-color: var(--crystal-border);
+}
+
+/* File uploader */
+[data-testid="stFileUploaderDropzone"] {
+    background: var(--crystal-light);
+    border: 1px dashed var(--crystal-border);
+    border-radius: 8px;
+}
