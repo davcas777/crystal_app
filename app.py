@@ -170,10 +170,15 @@ for msg in messages:
 # ---------------------------------------------------------------------------
 # File uploader (above the input)
 # ---------------------------------------------------------------------------
-with st.expander("📎 Adjuntar archivo (PDF, Word, texto, imagen)", expanded=False):
+with st.expander("📎 Adjuntar archivo (PDF, Word, Excel, texto, imagen)", expanded=False):
     uploaded = st.file_uploader(
         "Sube hasta 5 archivos para el modelo",
-        type=["pdf", "docx", "doc", "txt", "md", "csv", "png", "jpg", "jpeg", "webp", "gif"],
+        type=[
+            "pdf", "docx", "doc",
+            "xlsx", "xls",
+            "txt", "md", "csv",
+            "png", "jpg", "jpeg", "webp", "gif",
+        ],
         accept_multiple_files=True,
         key=f"uploader_{conversation_id}",
         label_visibility="collapsed",

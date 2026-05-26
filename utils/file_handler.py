@@ -51,6 +51,40 @@ def _extract_docx(data: bytes) -> str:
     return "\n".join(parts) if parts else "(Documento sin contenido extraíble.)"
 
 
+def _extract_xlsx(data: bytes) -> str:
+    from openpyxl import load_workbook
+
+    wb = load_workbook(io.BytesIO(data), data_only=True, read_only=True)
+    sheets: list[str] = []
+    for sheet_name in wb.sheetnames:
+        ws = wb[sheet_name]
+        rows: list[str] = []
+        for row in ws.iter_rows(values_only=True):
+            cells = ["" if c is None else str(c) for c in row]
+            if any(cell.strip() for cell in cells):
+                rows.append(" | ".join(cells))
+        if rows:
+            sheets.append(f"[Hoja: {sheet_name}]\n" + "\n".join(rows))
+    wb.close()
+    return "\n\n".join(sheets) if sheets else "(Excel sin contenido extraíble.)"
+
+
+def _extract_xls(data: bytes) -> str:
+    import xlrd
+
+    book = xlrd.open_workbook(file_contents=data)
+    sheets: list[str] = []
+    for sheet in book.sheets():
+        rows: list[str] = []
+        for row_idx in range(sheet.nrows):
+            cells = [str(sheet.cell_value(row_idx, c)) for c in range(sheet.ncols)]
+            if any(cell.strip() for cell in cells):
+                rows.append(" | ".join(cells))
+        if rows:
+            sheets.append(f"[Hoja: {sheet.name}]\n" + "\n".join(rows))
+    return "\n\n".join(sheets) if sheets else "(Excel sin contenido extraíble.)"
+
+
 def extract_file_content(uploaded_file: Any) -> dict:
     """Inspect an UploadedFile and return its model-ready payload."""
     name = uploaded_file.name
@@ -72,6 +106,10 @@ def extract_file_content(uploaded_file: Any) -> dict:
             text = _extract_pdf(data)
         elif suffix in {"docx", "doc"}:
             text = _extract_docx(data)
+        elif suffix == "xlsx":
+            text = _extract_xlsx(data)
+        elif suffix == "xls":
+            text = _extract_xls(data)
         elif suffix in {"txt", "md", "csv"}:
             text = data.decode("utf-8", errors="replace")
         else:
