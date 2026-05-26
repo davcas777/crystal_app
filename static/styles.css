@@ -1,129 +1,289 @@
-/* Crystal brand styling — clean black/white with red textile-needle accent */
+/* Crystal AI Assistant — minimal, ChatGPT-style layout
+   White canvas, centered chat column, hairline borders, Crystal red used
+   sparingly on focus and primary action only. */
 
 :root {
-    --crystal-black: #000000;
-    --crystal-red: #E30613;
-    --crystal-dark: #1A1A1A;
-    --crystal-gray: #5C5C5C;
-    --crystal-light: #F4F4F4;
-    --crystal-border: #E4E4E4;
+    --c-bg: #FFFFFF;
+    --c-text: #1A1A1A;
+    --c-text-muted: #6E6E6E;
+    --c-text-soft: #8C8C8C;
+    --c-border: #ECECEC;
+    --c-border-strong: #D9D9D9;
+    --c-surface: #FAFAFA;
+    --c-surface-hover: #F2F2F2;
+    --c-accent: #E30613;
+    --c-accent-soft: rgba(227, 6, 19, 0.12);
+    --c-radius-sm: 6px;
+    --c-radius-md: 10px;
+    --c-radius-lg: 14px;
+    --c-radius-pill: 999px;
+    --c-content-max: 740px;
+    --c-shadow-soft: 0 1px 2px rgba(0,0,0,0.04);
 }
 
-/* Hide the default Streamlit chrome */
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-header[data-testid="stHeader"] {background: transparent;}
+/* ---------- Strip Streamlit chrome ---------- */
+#MainMenu { visibility: hidden; }
+footer { visibility: hidden; }
+header[data-testid="stHeader"] { background: transparent; height: 0; }
 
-/* App background and base typography */
+/* ---------- Base ---------- */
 .stApp {
-    background: #FFFFFF;
-    color: var(--crystal-dark);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--c-bg);
+    color: var(--c-text);
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
 }
 
-/* Sidebar */
-section[data-testid="stSidebar"] {
-    background: var(--crystal-light);
-    border-right: 1px solid var(--crystal-border);
+.block-container {
+    padding-top: 1.2rem;
+    padding-bottom: 1rem;
+    max-width: 960px;
 }
-section[data-testid="stSidebar"] .stMarkdown h3 {
-    color: var(--crystal-black);
-    font-size: 0.85rem;
+
+/* Center the content column even further so chat feels like a column */
+.crystal-chat-column {
+    max-width: var(--c-content-max);
+    margin: 0 auto;
+}
+
+/* ---------- Sidebar (slim, conversation list only) ---------- */
+section[data-testid="stSidebar"] {
+    background: #FCFCFC;
+    border-right: 1px solid var(--c-border);
+}
+section[data-testid="stSidebar"] > div { padding-top: 0.8rem; }
+section[data-testid="stSidebar"] .stMarkdown p { margin: 0; }
+
+.sidebar-label {
+    color: var(--c-text-soft);
+    font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    margin-bottom: 0.5rem;
+    margin: 0.4rem 0 0.6rem 0.1rem;
 }
+
+.sidebar-footer {
+    color: var(--c-text-soft);
+    font-size: 0.78rem;
+    padding-top: 0.4rem;
+    line-height: 1.4;
+}
+
 .brand-tagline {
-    color: var(--crystal-gray);
+    color: var(--c-text-soft);
     font-style: italic;
-    font-size: 0.85rem;
-    margin-top: 0.5rem;
-    border-left: 3px solid var(--crystal-red);
-    padding-left: 0.6rem;
+    font-size: 0.78rem;
+    margin-top: 0.4rem;
+    border-left: 2px solid var(--c-accent);
+    padding-left: 0.55rem;
 }
 
-/* Header block */
-.app-header {
-    border-bottom: 1px solid var(--crystal-border);
-    padding-bottom: 0.75rem;
-    margin-bottom: 1.25rem;
+/* ---------- Header bar in main column ---------- */
+.crystal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--c-border);
+    padding-bottom: 0.7rem;
+    margin-bottom: 1.5rem;
 }
-.app-header h1 {
-    color: var(--crystal-black);
-    font-weight: 600;
+.crystal-header h1 {
     margin: 0;
-    font-size: 1.6rem;
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--c-text);
 }
-.app-header h1::after {
-    content: "";
-    display: inline-block;
-    width: 0.5rem;
-    height: 0.5rem;
-    background: var(--crystal-red);
-    border-radius: 50%;
-    margin-left: 0.5rem;
-    vertical-align: middle;
-}
-.app-header .subtitle {
-    color: var(--crystal-gray);
-    margin: 0.2rem 0 0 0;
-    font-size: 0.95rem;
+.crystal-header .crystal-subtitle {
+    font-size: 0.78rem;
+    color: var(--c-text-soft);
+    margin-top: 0.1rem;
 }
 
-/* Buttons */
+/* Hide the column gap padding inside the header row, keep things tight */
+.crystal-header-row [data-testid="stHorizontalBlock"] {
+    gap: 0.6rem !important;
+}
+
+/* ---------- Inputs: selectbox & buttons sit inline in the header ---------- */
+[data-baseweb="select"] > div {
+    border-radius: var(--c-radius-pill);
+    border-color: var(--c-border-strong);
+    background: var(--c-bg);
+    min-height: 36px;
+    box-shadow: var(--c-shadow-soft);
+}
+[data-baseweb="select"] > div:hover { border-color: var(--c-text); }
+
+/* Buttons: subtle outline by default, primary uses Crystal black */
 .stButton > button {
-    border-radius: 6px;
-    border: 1px solid var(--crystal-border);
-    background: #FFFFFF;
-    color: var(--crystal-dark);
+    border-radius: var(--c-radius-pill);
+    border: 1px solid var(--c-border-strong);
+    background: var(--c-bg);
+    color: var(--c-text);
     font-weight: 500;
-    transition: all 120ms ease;
+    padding: 0.4rem 0.95rem;
+    box-shadow: var(--c-shadow-soft);
+    transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 .stButton > button:hover {
-    border-color: var(--crystal-black);
-    color: var(--crystal-black);
+    border-color: var(--c-text);
+    background: var(--c-surface-hover);
 }
 .stButton > button[kind="primary"] {
-    background: var(--crystal-black);
-    border-color: var(--crystal-black);
-    color: #FFFFFF;
+    background: var(--c-text);
+    border-color: var(--c-text);
+    color: var(--c-bg);
 }
 .stButton > button[kind="primary"]:hover {
-    background: var(--crystal-red);
-    border-color: var(--crystal-red);
+    background: var(--c-accent);
+    border-color: var(--c-accent);
 }
 
-/* Chat messages */
+/* Sidebar buttons read like list items, not chips */
+section[data-testid="stSidebar"] .stButton > button {
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    border-radius: var(--c-radius-sm);
+    color: var(--c-text);
+    text-align: left;
+    justify-content: flex-start;
+    padding: 0.35rem 0.55rem;
+    font-weight: 400;
+}
+section[data-testid="stSidebar"] .stButton > button:hover {
+    background: var(--c-surface-hover);
+    border: none;
+}
+/* Delete-conversation '✕' button shrinks */
+section[data-testid="stSidebar"] .stButton > button[kind="secondary"]:has(*:contains("✕")) {
+    color: var(--c-text-soft);
+}
+
+/* ---------- Chat messages: flowing, no bubbles ---------- */
 [data-testid="stChatMessage"] {
-    background: #FFFFFF;
-    border: 1px solid var(--crystal-border);
-    border-radius: 10px;
-    padding: 0.9rem 1.1rem;
-    margin-bottom: 0.65rem;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0.4rem 0;
+    margin: 0.1rem 0 0.4rem 0;
+    gap: 0.75rem;
 }
-[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {
-    background: var(--crystal-light);
+/* Slim down the avatar */
+[data-testid="stChatMessage"] [data-testid="chatAvatarIcon-user"],
+[data-testid="stChatMessage"] [data-testid="chatAvatarIcon-assistant"],
+[data-testid="stChatMessage"] img {
+    width: 26px !important;
+    height: 26px !important;
+    border-radius: 999px;
+    flex-shrink: 0;
+}
+/* Make user/assistant text containers feel airy */
+[data-testid="stChatMessage"] [data-testid="stChatMessageContent"] {
+    padding: 0;
+}
+/* Subtle hairline separator between consecutive messages */
+[data-testid="stChatMessage"] + [data-testid="stChatMessage"] {
+    border-top: 1px solid var(--c-border);
+    padding-top: 0.9rem;
+    margin-top: 0.9rem;
+}
+/* Caption (file attachments) reads as soft metadata */
+[data-testid="stChatMessage"] [data-testid="stCaptionContainer"] {
+    color: var(--c-text-soft);
+    font-size: 0.78rem;
+    margin-bottom: 0.25rem;
 }
 
-/* Chat input */
+/* ---------- Chat input ---------- */
+[data-testid="stChatInput"] {
+    background: var(--c-bg);
+    padding-top: 0.5rem;
+}
+[data-testid="stChatInput"] > div {
+    border-radius: var(--c-radius-lg);
+    border: 1px solid var(--c-border-strong);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    background: var(--c-bg);
+}
 [data-testid="stChatInput"] textarea {
-    border-radius: 8px;
-    border: 1px solid var(--crystal-border);
+    border: none !important;
+    background: transparent !important;
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--c-text);
 }
-[data-testid="stChatInput"] textarea:focus {
-    border-color: var(--crystal-red);
-    box-shadow: 0 0 0 2px rgba(227, 6, 19, 0.12);
-}
-
-/* Selectbox */
-[data-baseweb="select"] > div {
-    border-radius: 6px;
-    border-color: var(--crystal-border);
+[data-testid="stChatInput"] > div:focus-within {
+    border-color: var(--c-text);
+    box-shadow: 0 0 0 3px var(--c-accent-soft);
 }
 
-/* File uploader */
+/* ---------- Popover (attachment dropdown) ---------- */
+[data-testid="stPopover"] button {
+    border-radius: var(--c-radius-pill);
+    padding: 0.35rem 0.7rem;
+    border: 1px solid var(--c-border-strong);
+    background: var(--c-bg);
+    color: var(--c-text-muted);
+    font-weight: 500;
+    box-shadow: var(--c-shadow-soft);
+}
+[data-testid="stPopover"] button:hover {
+    background: var(--c-surface-hover);
+    border-color: var(--c-text);
+    color: var(--c-text);
+}
+
+/* ---------- File uploader (inside popover) ---------- */
 [data-testid="stFileUploaderDropzone"] {
-    background: var(--crystal-light);
-    border: 1px dashed var(--crystal-border);
-    border-radius: 8px;
+    background: var(--c-surface);
+    border: 1px dashed var(--c-border-strong);
+    border-radius: var(--c-radius-md);
+    padding: 1rem;
 }
+[data-testid="stFileUploaderDropzone"]:hover {
+    border-color: var(--c-text);
+    background: var(--c-surface-hover);
+}
+
+/* ---------- Attachment pill below input ---------- */
+.crystal-attach-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: var(--c-surface);
+    color: var(--c-text-muted);
+    border: 1px solid var(--c-border);
+    border-radius: var(--c-radius-pill);
+    padding: 0.18rem 0.55rem;
+    font-size: 0.78rem;
+    margin: 0.15rem 0.3rem 0 0;
+}
+
+/* ---------- Sticky bottom toolbar (model picker + paperclip) ----------
+   Streamlit's chat_input is positioned at the bottom of the block container.
+   We make the toolbar sticky so it stays visible just above the input no
+   matter how far down the conversation scrolls. */
+.crystal-bottom-bar {
+    position: sticky;
+    bottom: 5.6rem;
+    background: var(--c-bg);
+    padding: 0.4rem 0 0.3rem 0;
+    z-index: 5;
+    border-top: 1px solid transparent;
+}
+.crystal-bottom-bar [data-testid="stHorizontalBlock"] {
+    align-items: center;
+    gap: 0.5rem !important;
+}
+/* The bottom-bar selectbox should read as a compact pill */
+.crystal-bottom-bar [data-baseweb="select"] > div {
+    min-height: 34px;
+    font-size: 0.85rem;
+}
+
+/* ---------- Misc Streamlit cleanup ---------- */
+hr { border-color: var(--c-border) !important; margin: 0.8rem 0; }
+.stMarkdown p { margin: 0 0 0.5rem 0; }

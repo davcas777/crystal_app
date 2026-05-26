@@ -3,7 +3,7 @@ Crystal — AI Gateway Frontend (Databricks App)
 
 A branded Streamlit chat app that fronts Databricks AI Gateway endpoints.
 - Endpoint picker (configured via env vars)
-- File attachments (PDF / Word / text / image) sent to the model
+- File attachments (PDF / Word / Excel / text / image) sent to the model
 - Per-user chat history (multiple conversations per user, persisted to SQLite)
 - Databricks-native authentication (reads X-Forwarded-Email header)
 """
@@ -32,11 +32,6 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Load CSS
-css_path = Path(__file__).parent / "static" / "styles.css"
-if css_path.exists():
-    st.markdown(f"<style>{css_path.read_text()}</style>", unsafe_allow_html=True)
-
 # ---------------------------------------------------------------------------
 # Config & singletons
 # ---------------------------------------------------------------------------
@@ -53,6 +48,219 @@ if "pending_attachments" not in st.session_state:
     st.session_state.pending_attachments = []
 if "selected_endpoint" not in st.session_state:
     st.session_state.selected_endpoint = config.endpoints[0]["name"]
+if "theme" not in st.session_state:
+    st.session_state.theme = "light"
+
+# Load CSS (base + theme override). Loaded after session-state init so the
+# theme choice can flip a `data-theme` attribute on the app wrapper.
+css_path = Path(__file__).parent / "static" / "styles.css"
+base_css = css_path.read_text() if css_path.exists() else ""
+st.markdown(f"<style>{base_css}</style>", unsafe_allow_html=True)
+if st.session_state.theme == "dark":
+    # Toggle is implemented by injecting a second <style> block whose
+    # selectors override the light-mode variables.
+    st.markdown(
+        """
+        <style>
+        :root {
+            --c-bg: #0E0E0E;
+            --c-text: #F1F1F1;
+            --c-text-muted: #A0A0A0;
+            --c-text-soft: #6E6E6E;
+            --c-border: #232323;
+            --c-border-strong: #333333;
+            --c-surface: #161616;
+            --c-surface-hover: #1F1F1F;
+            --c-shadow-soft: 0 1px 2px rgba(0,0,0,0.4);
+        }
+        /* ---- App + main area backgrounds ---- */
+        .stApp,
+        [data-testid="stAppViewContainer"],
+        [data-testid="stMain"],
+        .main,
+        [data-testid="stMainBlockContainer"],
+        [data-testid="block-container"] { background: #0E0E0E !important; color: #F1F1F1; }
+
+        /* ---- All readable text inside main area (chat, markdown, headings) ----
+           Streamlit nests text in stMarkdownContainer / stChatMessageContent with
+           rules that beat my container-level color. Force light on every text node
+           inside those containers in the main area. */
+        .stApp p,
+        .stApp li,
+        .stApp ul, .stApp ol,
+        .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6,
+        .stApp span,
+        .stApp strong, .stApp em, .stApp b, .stApp i,
+        .stApp blockquote,
+        .stApp label,
+        .stMarkdown, .stMarkdown *,
+        [data-testid="stMarkdownContainer"],
+        [data-testid="stMarkdownContainer"] *,
+        [data-testid="stChatMessage"] *,
+        [data-testid="stChatMessageContent"] * { color: #F1F1F1 !important; }
+
+        /* Subdued text (captions, hints, sidebar footer) should stay muted */
+        [data-testid="stCaptionContainer"],
+        [data-testid="stCaptionContainer"] *,
+        .stCaption, .stCaption *,
+        .sidebar-footer, .brand-tagline,
+        .sidebar-label { color: #A0A0A0 !important; }
+
+        /* Links */
+        .stApp a,
+        [data-testid="stMarkdownContainer"] a,
+        .stMarkdown a { color: #6BA6FF !important; }
+
+        /* Inline + block code */
+        [data-testid="stMarkdownContainer"] code,
+        .stMarkdown code {
+            background: #1A1A1A !important;
+            color: #F8F8F2 !important;
+            border: 1px solid #2E2E2E !important;
+            padding: 0.05rem 0.3rem;
+            border-radius: 4px;
+        }
+        [data-testid="stMarkdownContainer"] pre,
+        .stMarkdown pre {
+            background: #161616 !important;
+            border: 1px solid #2E2E2E !important;
+            color: #F8F8F2 !important;
+        }
+        [data-testid="stMarkdownContainer"] pre code,
+        .stMarkdown pre code {
+            background: transparent !important;
+            border: none !important;
+            padding: 0 !important;
+            color: #F8F8F2 !important;
+        }
+
+        /* Tables (markdown) */
+        [data-testid="stMarkdownContainer"] table,
+        .stMarkdown table { border-color: #2E2E2E !important; }
+        [data-testid="stMarkdownContainer"] th,
+        .stMarkdown th {
+            background: #1A1A1A !important;
+            border-color: #2E2E2E !important;
+            color: #F1F1F1 !important;
+        }
+        [data-testid="stMarkdownContainer"] td,
+        .stMarkdown td {
+            border-color: #2E2E2E !important;
+            color: #F1F1F1 !important;
+        }
+
+        /* Blockquote */
+        [data-testid="stMarkdownContainer"] blockquote,
+        .stMarkdown blockquote {
+            border-left-color: #3A3A3A !important;
+            color: #C8C8C8 !important;
+        }
+
+        /* ---- The white bar at the bottom: Streamlit wraps st.chat_input
+                in stBottom / stChatInputContainer which has a default white bg ---- */
+        [data-testid="stBottom"],
+        [data-testid="stBottomBlockContainer"],
+        [data-testid="stChatInputContainer"],
+        [data-testid="stChatInput"] { background: #0E0E0E !important; }
+
+        /* ---- Sidebar ---- */
+        section[data-testid="stSidebar"],
+        section[data-testid="stSidebar"] > div,
+        [data-testid="stSidebarContent"] { background: #131313 !important; border-right-color: #232323; }
+        section[data-testid="stSidebar"] * { color: #F1F1F1; }
+
+        /* ---- Selects & menus ---- */
+        [data-baseweb="select"] > div { background: #1A1A1A !important; color: #F1F1F1 !important; }
+        [data-baseweb="select"] svg { color: #A0A0A0 !important; }
+        [data-baseweb="popover"] [role="listbox"],
+        [data-baseweb="menu"] { background: #1A1A1A !important; color: #F1F1F1 !important; }
+        [data-baseweb="menu"] li:hover { background: #232323 !important; }
+
+        /* ---- Chat input pill ---- */
+        [data-testid="stChatInput"] > div {
+            background: #1A1A1A !important;
+            border-color: #333333 !important;
+        }
+        [data-testid="stChatInput"] textarea { color: #F1F1F1 !important; }
+        [data-testid="stChatInput"] textarea::placeholder { color: #6E6E6E !important; }
+
+        /* ---- File uploader (inside popover) ---- */
+        [data-testid="stFileUploaderDropzone"] {
+            background: #161616 !important;
+            border-color: #333333 !important;
+            color: #F1F1F1 !important;
+        }
+        [data-testid="stFileUploaderDropzone"] * { color: #F1F1F1 !important; }
+
+        /* ---- Buttons (main area) ---- */
+        .stButton > button {
+            background: #1A1A1A !important;
+            color: #F1F1F1 !important;
+            border-color: #333333 !important;
+        }
+        .stButton > button:hover {
+            background: #232323 !important;
+            border-color: #F1F1F1 !important;
+        }
+        .stButton > button[kind="primary"] {
+            background: #1A1A1A !important;
+            color: #F1F1F1 !important;
+            border-color: #3A3A3A !important;
+        }
+        .stButton > button[kind="primary"]:hover {
+            background: var(--c-accent) !important;
+            border-color: var(--c-accent) !important;
+            color: #FFFFFF !important;
+        }
+
+        /* ---- Sidebar buttons: history list + small actions ---- */
+        section[data-testid="stSidebar"] .stButton > button,
+        section[data-testid="stSidebar"] button[kind="secondary"],
+        section[data-testid="stSidebar"] [data-testid^="baseButton"] {
+            background: transparent !important;
+            border: none !important;
+            color: #F1F1F1 !important;
+            box-shadow: none !important;
+        }
+        section[data-testid="stSidebar"] .stButton > button:hover,
+        section[data-testid="stSidebar"] button[kind="secondary"]:hover,
+        section[data-testid="stSidebar"] [data-testid^="baseButton"]:hover {
+            background: #1F1F1F !important;
+            color: #FFFFFF !important;
+        }
+        /* Sidebar's primary "+ Nueva conversación": dark tile with a hairline
+           border so it reads as the primary action without screaming white. */
+        section[data-testid="stSidebar"] .stButton > button[kind="primary"],
+        section[data-testid="stSidebar"] [data-testid="baseButton-primary"] {
+            background: #1A1A1A !important;
+            color: #F1F1F1 !important;
+            border: 1px solid #3A3A3A !important;
+        }
+        section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover,
+        section[data-testid="stSidebar"] [data-testid="baseButton-primary"]:hover {
+            background: var(--c-accent) !important;
+            color: #FFFFFF !important;
+            border-color: var(--c-accent) !important;
+        }
+
+        /* ---- Popover trigger (📎) ---- */
+        [data-testid="stPopover"] button {
+            background: #1A1A1A !important;
+            color: #F1F1F1 !important;
+            border-color: #333333 !important;
+        }
+        [data-testid="stPopover"] button:hover {
+            background: #232323 !important;
+            border-color: #F1F1F1 !important;
+        }
+
+        /* ---- Misc ---- */
+        hr { border-color: #232323 !important; }
+        .crystal-bottom-bar { background: #0E0E0E !important; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -72,28 +280,28 @@ def get_llm_client() -> OpenAI:
         from databricks.sdk import WorkspaceClient
 
         w = WorkspaceClient()
-        # `authenticate()` returns a {"Authorization": "Bearer …"} header pair
         auth_headers = w.config.authenticate()
         token = auth_headers.get("Authorization", "").replace("Bearer ", "")
     return OpenAI(api_key=token, base_url=config.base_url)
 
 
 # ---------------------------------------------------------------------------
-# Sidebar — branding, endpoint picker, conversation list
+# Sidebar — brand, model picker, conversation list, theme toggle
 # ---------------------------------------------------------------------------
+endpoint_names = [ep["name"] for ep in config.endpoints]
+endpoint_labels = {ep["name"]: ep.get("label", ep["name"]) for ep in config.endpoints}
+
 with st.sidebar:
-    st.image("static/logo.png", width=160)
+    st.image("static/logo.png", width=140)
     st.markdown(
         "<div class='brand-tagline'>Tejemos vida para nuestro planeta</div>",
         unsafe_allow_html=True,
     )
-    st.markdown("---")
+    st.markdown("<div style='height:0.6rem;'></div>", unsafe_allow_html=True)
 
-    st.markdown("### Modelo")
-    endpoint_names = [ep["name"] for ep in config.endpoints]
-    endpoint_labels = {ep["name"]: ep.get("label", ep["name"]) for ep in config.endpoints}
+    st.markdown("<div class='sidebar-label'>Modelo</div>", unsafe_allow_html=True)
     st.session_state.selected_endpoint = st.selectbox(
-        "Selecciona el modelo",
+        "Modelo",
         options=endpoint_names,
         format_func=lambda n: endpoint_labels.get(n, n),
         index=endpoint_names.index(st.session_state.selected_endpoint)
@@ -102,13 +310,13 @@ with st.sidebar:
         label_visibility="collapsed",
     )
 
-    st.markdown("---")
-    st.markdown("### Conversaciones")
-
-    if st.button("Nueva conversación", use_container_width=True, type="primary"):
+    if st.button("＋ Nueva conversación", use_container_width=True, type="primary"):
         st.session_state.active_conversation_id = None
         st.session_state.pending_attachments = []
         st.rerun()
+
+    st.markdown("<hr/>", unsafe_allow_html=True)
+    st.markdown("<div class='sidebar-label'>Conversaciones</div>", unsafe_allow_html=True)
 
     conversations = store.list_conversations(user.email)
     if conversations:
@@ -133,21 +341,28 @@ with st.sidebar:
                         st.session_state.active_conversation_id = None
                     st.rerun()
     else:
-        st.caption("Aún no tienes conversaciones. Inicia una desde el panel principal.")
+        st.caption("Aún no tienes conversaciones.")
 
-    st.markdown("---")
-    st.caption(f"Sesión: **{user.display_name}**")
+    # Footer: user + theme toggle
+    st.markdown("<hr/>", unsafe_allow_html=True)
+    foot_cols = st.columns([5, 2])
+    with foot_cols[0]:
+        st.markdown(
+            f"<div class='sidebar-footer'>Sesión · {user.display_name}</div>",
+            unsafe_allow_html=True,
+        )
+    with foot_cols[1]:
+        is_dark = st.session_state.theme == "dark"
+        toggle_label = "☀️" if is_dark else "🌙"
+        toggle_help = "Modo claro" if is_dark else "Modo oscuro"
+        if st.button(toggle_label, key="theme_toggle", help=toggle_help):
+            st.session_state.theme = "light" if is_dark else "dark"
+            st.rerun()
 
 # ---------------------------------------------------------------------------
-# Main panel
+# Main column — centered chat content, no top header (sidebar handles chrome)
 # ---------------------------------------------------------------------------
-st.markdown(
-    "<div class='app-header'>"
-    "<h1>Crystal AI Assistant</h1>"
-    "<p class='subtitle'>Consulta los modelos corporativos a través del AI Gateway de Databricks.</p>"
-    "</div>",
-    unsafe_allow_html=True,
-)
+st.markdown("<div class='crystal-chat-column'>", unsafe_allow_html=True)
 
 # Ensure / create conversation
 conversation_id = st.session_state.active_conversation_id
@@ -158,41 +373,69 @@ if conversation_id is None:
     )
     st.session_state.active_conversation_id = conversation_id
 
-# Render history
+# ---------------------------------------------------------------------------
+# Chat history
+# ---------------------------------------------------------------------------
 messages = store.list_messages(conversation_id)
+if not messages:
+    st.markdown(
+        "<div style='color:#8C8C8C; font-size:0.9rem; padding:0.5rem 0 1rem 0;'>"
+        f"Hola {user.display_name.split()[0] if user.display_name else ''}, "
+        "soy tu asistente Crystal. ¿En qué te ayudo hoy?"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
 for msg in messages:
     with st.chat_message(msg["role"], avatar="🧑" if msg["role"] == "user" else "static/logo.png"):
         if msg.get("attachments"):
-            for att in msg["attachments"]:
-                st.caption(f"📎 {att}")
+            attach_html = "".join(
+                f"<span class='crystal-attach-pill'>📎 {a}</span>" for a in msg["attachments"]
+            )
+            st.markdown(attach_html, unsafe_allow_html=True)
         st.markdown(msg["content"])
 
 # ---------------------------------------------------------------------------
-# File uploader (above the input)
+# Sticky bottom toolbar: paperclip popover + pending-files indicator
+# (Sits just above the chat input thanks to position:sticky in styles.css.)
 # ---------------------------------------------------------------------------
-with st.expander("📎 Adjuntar archivo (PDF, Word, Excel, texto, imagen)", expanded=False):
-    uploaded = st.file_uploader(
-        "Sube hasta 5 archivos para el modelo",
-        type=[
-            "pdf", "docx", "doc",
-            "xlsx", "xls",
-            "txt", "md", "csv",
-            "png", "jpg", "jpeg", "webp", "gif",
-        ],
-        accept_multiple_files=True,
-        key=f"uploader_{conversation_id}",
-        label_visibility="collapsed",
-    )
-    if uploaded:
-        st.session_state.pending_attachments = uploaded
-        names = ", ".join(f.name for f in uploaded)
-        st.success(f"Listo para enviar: {names}")
+st.markdown("<div class='crystal-bottom-bar'>", unsafe_allow_html=True)
+bcol_attach, bcol_status = st.columns([1, 9])
+with bcol_attach:
+    with st.popover("📎", help="Adjuntar archivo"):
+        st.caption("Adjunta hasta 5 archivos (PDF, Word, Excel, texto o imagen).")
+        uploaded = st.file_uploader(
+            "Archivos",
+            type=[
+                "pdf", "docx", "doc",
+                "xlsx", "xls",
+                "txt", "md", "csv",
+                "png", "jpg", "jpeg", "webp", "gif",
+            ],
+            accept_multiple_files=True,
+            key=f"uploader_{conversation_id}",
+            label_visibility="collapsed",
+        )
+        if uploaded:
+            st.session_state.pending_attachments = uploaded
+with bcol_status:
+    if st.session_state.pending_attachments:
+        names = ", ".join(f.name for f in st.session_state.pending_attachments)
+        st.markdown(
+            f"<div style='color:#6E6E6E; font-size:0.82rem; padding-top:0.55rem;'>"
+            f"Listo para enviar: <b>{names}</b></div>",
+            unsafe_allow_html=True,
+        )
+st.markdown("</div>", unsafe_allow_html=True)
 
-# ---------------------------------------------------------------------------
-# Chat input
-# ---------------------------------------------------------------------------
 prompt = st.chat_input("Escribe tu mensaje…")
 
+# Close the centered column wrapper
+st.markdown("</div>", unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------------
+# Handle a new turn
+# ---------------------------------------------------------------------------
 if prompt:
     attachments = st.session_state.pending_attachments or []
     attachment_names = [a.name for a in attachments]
@@ -231,15 +474,17 @@ if prompt:
 
     # Render user message
     with st.chat_message("user", avatar="🧑"):
-        for name in attachment_names:
-            st.caption(f"📎 {name}")
+        if attachment_names:
+            attach_html = "".join(
+                f"<span class='crystal-attach-pill'>📎 {n}</span>" for n in attachment_names
+            )
+            st.markdown(attach_html, unsafe_allow_html=True)
         st.markdown(display_text)
 
     # Build OpenAI-format message list from history
     api_messages = []
     for m in store.list_messages(conversation_id):
         if m["role"] == "user" and m["id"] == store.last_message_id(conversation_id):
-            # Replace last user message with extracted version + image parts
             if image_parts:
                 api_messages.append(
                     {
@@ -265,16 +510,11 @@ if prompt:
                 stream=True,
             )
             for chunk in stream:
-                # Some providers emit chunks with no choices (e.g. final
-                # usage-only chunk on OpenAI-compatible streams).
                 if not getattr(chunk, "choices", None):
                     continue
                 delta = chunk.choices[0].delta.content
                 if not delta:
                     continue
-                # When the gateway proxies Anthropic (or any provider that
-                # emits structured content blocks), delta may arrive as a
-                # list of dicts instead of a plain string. Flatten to text.
                 if isinstance(delta, list):
                     delta = "".join(
                         part.get("text", "")
