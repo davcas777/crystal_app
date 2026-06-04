@@ -11,7 +11,8 @@ Construida con **Streamlit** + la API compatible con OpenAI del Databricks AI Ga
 | | |
 |---|---|
 | Selector de modelo | Menú lateral con todos los endpoints listados en `app.yaml` (no requiere cambios de código para agregar nuevos) |
-| Archivos adjuntos | PDF, Word (`.docx`), texto / CSV / Markdown e imágenes (PNG / JPG / WebP / GIF). El texto se inserta en el prompt; las imágenes se envían a los modelos multimodales con el esquema de visión de OpenAI |
+| Archivos adjuntos | PDF, Word (`.docx`), Excel (`.xlsx`/`.xls`), texto / CSV / Markdown e imágenes (PNG / JPG / WebP / GIF). El texto se inserta en el prompt; las imágenes se envían a los modelos multimodales con el esquema de visión de OpenAI |
+| **Generación de imágenes** | Con modelos OpenAI, un botón **🎨 Imagen** genera imágenes a partir del texto del usuario, vía la **Responses API** + herramienta `image_generation`. Se transmite por streaming (la imagen aparece de forma progresiva) y se guarda en el historial. Ver la sección [Generación de imágenes](#generación-de-imágenes-modelos-openai) |
 | Historial por usuario | Almacenado en SQLite e indexado por el correo del usuario (`X-Forwarded-Email`). Cada usuario puede crear, renombrar, alternar y borrar múltiples conversaciones |
 | Imagen de Crystal | Logo, paleta corporativa (negro + rojo) y el lema *"Tejemos vida para nuestro planeta"* |
 | Respuestas en streaming | Los tokens se imprimen en vivo en el panel de chat |
@@ -89,8 +90,10 @@ env:
     value: "https://<SU-WORKSPACE>.azuredatabricks.net/ai-gateway/mlflow/v1"
 
   - name: AI_GATEWAY_ENDPOINTS
-    value: '[{"name":"gpt","label":"OpenAI GPT"},{"name":"claude","label":"Anthropic Claude"}]'
+    value: '[{"name":"gpt","label":"OpenAI GPT","image_model":"gpt"},{"name":"claude","label":"Anthropic Claude"}]'
 ```
+
+> El campo opcional `"image_model"` habilita la generación de imágenes en esa ruta (solo modelos OpenAI). Ver [Generación de imágenes](#generación-de-imágenes-modelos-openai).
 
 Los endpoints aceptan dos formatos:
 
@@ -199,9 +202,15 @@ Todas las opciones se configuran con variables de entorno (en `app.yaml` para la
 | Variable | Requerida | Valor por defecto | Descripción |
 |---|---|---|---|
 | `AI_GATEWAY_BASE_URL` | sí | — | URL base compatible con OpenAI, debe terminar en `/ai-gateway/mlflow/v1` |
-| `AI_GATEWAY_ENDPOINTS` | sí | `gpt,claude` | Nombres separados por coma o arreglo JSON de `{name, label}` |
+| `AI_GATEWAY_ENDPOINTS` | sí | `gpt,claude` | Nombres separados por coma o arreglo JSON de `{name, label, image_model?}`. `image_model` habilita la generación de imágenes en esa ruta (solo OpenAI) |
 | `AI_GATEWAY_MAX_TOKENS` | no | `1024` | Tope de tokens por respuesta |
 | `CHAT_HISTORY_DB_PATH` | no | `/tmp/crystal_chat_history.db` | Archivo SQLite para el historial |
+| `AI_GATEWAY_RESPONSES_BASE_URL` | no | derivado de `AI_GATEWAY_BASE_URL` + `/ai-gateway/openai/v1` | Base de la Responses API (generación de imágenes). Por defecto se deriva del host |
+| `AI_GATEWAY_IMAGE_FORMAT` | no | `webp` | Formato de la imagen generada: `webp` / `jpeg` / `png` |
+| `AI_GATEWAY_IMAGE_QUALITY` | no | `medium` | Calidad: `low` / `medium` / `high` |
+| `AI_GATEWAY_IMAGE_SIZE` | no | `1024x1024` | Tamaño: `1024x1024` / `1024x1536` / `1536x1024` / `auto` |
+| `AI_GATEWAY_IMAGE_COMPRESSION` | no | `60` | Compresión 0–100 (webp/jpeg) |
+| `AI_GATEWAY_IMAGE_PARTIALS` | no | `2` | Nº de imágenes parciales progresivas durante el streaming |
 | `DATABRICKS_TOKEN` | solo local | — | PAT para desarrollo local |
 | `LOCAL_USER_EMAIL` | solo local | `anonymous@local` | Identidad simulada para desarrollo local |
 
@@ -257,6 +266,75 @@ Para turnos multimodales (imagen adjunta), el mensaje del usuario se convierte e
   ]
 }
 ```
+
+---
+
+## Generación de imágenes (modelos OpenAI)
+
+La app puede **generar imágenes** a partir del texto del usuario cuando la ruta seleccionada apunta a un **modelo OpenAI** (p.ej. la ruta `gpt`). En la barra inferior aparece un botón **🎨 Imagen**: al activarlo, ese turno genera una imagen en lugar de una respuesta de texto.
+
+### Cómo funciona por dentro
+
+El chat normal y la generación de imágenes usan **dos superficies distintas del mismo AI Gateway**:
+
+| | Chat (texto) | Imagen (🎨 activado) |
+|---|---|---|
+| API | Chat Completions | **Responses API** + herramienta `image_generation` |
+| Path | `…/ai-gateway/mlflow/v1/chat/completions` | `…/ai-gateway/openai/v1/responses` |
+| Modelo | la ruta seleccionada (`gpt`, `claude`, …) | el `image_model` de esa ruta |
+| Streaming | tokens de texto | imágenes parciales progresivas (`partial_images`) |
+
+Puntos clave:
+
+- **Solo modelos OpenAI** soportan `image_generation`. Claude (u otros no-OpenAI) no muestran el botón.
+- La generación pasa por la **misma ruta gobernada del AI Gateway** que el chat (mismo `image_model`), por lo que **hereda sus ACLs, rate limits, usage tracking y guardrails**. No se le pega directo a un endpoint de sistema.
+- El path de imágenes (`/ai-gateway/openai/v1`) **se deriva automáticamente** del host de `AI_GATEWAY_BASE_URL`; no hay que configurarlo (se puede sobreescribir con `AI_GATEWAY_RESPONSES_BASE_URL`).
+- Se usa **streaming** a propósito: evita el límite síncrono de ~640 KB de la respuesta, muestra la imagen de forma progresiva y expone el error real del proveedor si algo falla.
+- La imagen vuelve como **base64**, se renderiza en el chat y se **persiste embebida en el historial** (se vuelve a mostrar al reabrir la conversación).
+
+### Habilitarla en una ruta
+
+Agregue `"image_model"` a la entrada del endpoint en `AI_GATEWAY_ENDPOINTS`. Apúntelo a la **misma ruta** (para gobernanza unificada) o a una ruta dedicada (para presupuesto/límites separados):
+
+```json
+[
+  {"name": "gpt",    "label": "OpenAI GPT", "image_model": "gpt"},
+  {"name": "claude", "label": "Anthropic Claude"}
+]
+```
+
+- `image_model` presente → la ruta es capaz de generar imágenes (aparece el botón 🎨).
+- `image_model` ausente → la ruta es solo texto.
+
+### Equivalente en código
+
+```python
+from openai import OpenAI
+import os, base64
+
+client = OpenAI(
+    api_key=os.environ["DATABRICKS_TOKEN"],
+    base_url="https://<workspace>.azuredatabricks.net/ai-gateway/openai/v1",
+)
+
+stream = client.responses.create(
+    model="gpt",                       # la ruta OpenAI del AI Gateway (image_model)
+    input="Genera una imagen de una camiseta blanca con un logo rojo.",
+    tools=[{"type": "image_generation", "output_format": "webp",
+            "quality": "medium", "partial_images": 2}],
+    tool_choice="auto",
+    stream=True,
+)
+
+for event in stream:
+    if event.type == "response.image_generation_call.partial_image":
+        with open("salida.webp", "wb") as f:
+            f.write(base64.b64decode(event.partial_image_b64))
+```
+
+La implementación está en `app.py` → `get_responses_client()` y la rama `use_responses` del manejador de turnos. Los ajustes de imagen (formato, calidad, tamaño, compresión, parciales) son variables de entorno — ver la [Referencia de configuración](#referencia-de-configuración).
+
+> **Nota de proveedor:** la herramienta `image_generation` resuelve al modelo de imágenes de OpenAI por detrás (p.ej. `gpt-image-*`). Si ese backend tiene una caída temporal río arriba, la app muestra un mensaje amigable y deja el error técnico real en un desplegable. Reintente en unos minutos.
 
 ---
 
