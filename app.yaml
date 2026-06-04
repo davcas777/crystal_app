@@ -10,9 +10,34 @@ env:
 
   # Endpoints expuestos a los usuarios. Dos formatos soportados:
   #   Corto:    "gpt,claude"
-  #   Completo: '[{"name":"gpt","label":"OpenAI GPT"},{"name":"claude","label":"Anthropic Claude"}]'
+  #   Completo: '[{"name":"gpt","label":"OpenAI GPT","image_model":"gpt"},{"name":"claude","label":"Anthropic Claude"}]'
+  # "image_model" habilita la generación de imágenes para esa ruta y nombra el
+  # modelo/route que la atiende vía la Responses API (image_generation tool).
+  # Usamos la MISMA ruta gobernada del AI Gateway ("gpt") para que las consultas
+  # de imágenes hereden sus ACLs, rate limits, usage tracking y guardrails — en
+  # lugar de pegarle directo a un endpoint de sistema (p.ej. databricks-gpt-5),
+  # que evadiría la gobernanza de la ruta. Solo modelos OpenAI generan imágenes.
   - name: AI_GATEWAY_ENDPOINTS
-    value: '[{"name":"gpt","label":"OpenAI GPT"},{"name":"claude","label":"Anthropic Claude"}]'
+    value: '[{"name":"gpt","label":"OpenAI GPT","image_model":"gpt"},{"name":"claude","label":"Anthropic Claude"}]'
+
+  # (Opcional) Base URL OpenAI-compatible del AI Gateway para la Responses API
+  # (generación de imágenes vía streaming). Si se omite, se deriva del host de
+  # AI_GATEWAY_BASE_URL añadiendo /ai-gateway/openai/v1.
+  # - name: AI_GATEWAY_RESPONSES_BASE_URL
+  #   value: "https://adb-520209755093735.15.azuredatabricks.net/ai-gateway/openai/v1"
+
+  # Ajustes de imagen. Se transmite por streaming (partial_images), lo que evita
+  # el límite síncrono de ~640 KB; aun así se pide un formato comprimido.
+  - name: AI_GATEWAY_IMAGE_FORMAT
+    value: "webp"          # webp | jpeg | png
+  - name: AI_GATEWAY_IMAGE_QUALITY
+    value: "medium"        # low | medium | high
+  - name: AI_GATEWAY_IMAGE_SIZE
+    value: "1024x1024"     # 1024x1024 | 1024x1536 | 1536x1024 | auto
+  - name: AI_GATEWAY_IMAGE_COMPRESSION
+    value: "60"            # 0-100 (webp/jpeg)
+  - name: AI_GATEWAY_IMAGE_PARTIALS
+    value: "2"             # imágenes parciales progresivas durante el streaming
 
   # Máximo de tokens por respuesta
   - name: AI_GATEWAY_MAX_TOKENS

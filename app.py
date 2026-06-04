@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import base64
 import os
+import re
 from pathlib import Path
 
 import streamlit as st
@@ -50,6 +51,8 @@ if "selected_endpoint" not in st.session_state:
     st.session_state.selected_endpoint = config.endpoints[0]["name"]
 if "theme" not in st.session_state:
     st.session_state.theme = "light"
+if "image_mode" not in st.session_state:
+    st.session_state.image_mode = False
 
 # Load CSS (base + theme override). Loaded after session-state init so the
 # theme choice can flip a `data-theme` attribute on the app wrapper.
@@ -264,10 +267,35 @@ if st.session_state.theme == "dark":
 
 
 # ---------------------------------------------------------------------------
-# LLM client builder
+# Embedded-image marker — generated images are stored inline in the message
+# content so they persist in history and re-render without a schema change.
 # ---------------------------------------------------------------------------
-def get_llm_client() -> OpenAI:
-    """Build an OpenAI-compatible client pointed at the Databricks AI Gateway.
+IMAGE_MARKER_RE = re.compile(r"\[\[crystal-image:([A-Za-z0-9+/=\n]+)\]\]")
+
+
+def render_message_content(content: str) -> None:
+    """Render an assistant/user message, splitting out any inline images."""
+    parts = IMAGE_MARKER_RE.split(content)
+    for idx, part in enumerate(parts):
+        if idx % 2 == 1:  # capture groups (base64 image payloads)
+            try:
+                st.image(base64.b64decode(part))
+            except Exception:  # noqa: BLE001
+                st.caption("⚠️ No se pudo mostrar una imagen generada.")
+        elif part.strip():
+            st.markdown(part)
+
+
+def strip_image_markers(content: str) -> str:
+    """Remove inline image payloads before sending history back to the model."""
+    return IMAGE_MARKER_RE.sub("[imagen generada previamente]", content).strip()
+
+
+# ---------------------------------------------------------------------------
+# LLM client builders
+# ---------------------------------------------------------------------------
+def get_databricks_token() -> str:
+    """Resolve a Databricks bearer token.
 
     Auth resolution order:
       1. ``DATABRICKS_TOKEN`` env var (used for local dev)
@@ -282,7 +310,21 @@ def get_llm_client() -> OpenAI:
         w = WorkspaceClient()
         auth_headers = w.config.authenticate()
         token = auth_headers.get("Authorization", "").replace("Bearer ", "")
-    return OpenAI(api_key=token, base_url=config.base_url)
+    return token
+
+
+def get_llm_client() -> OpenAI:
+    """OpenAI-compatible client for Chat Completions via the AI Gateway."""
+    return OpenAI(api_key=get_databricks_token(), base_url=config.base_url)
+
+
+def get_responses_client() -> OpenAI:
+    """OpenAI-compatible client for the Responses API (image generation, etc.).
+
+    Targets the AI Gateway's OpenAI-compatible path (``/ai-gateway/openai/v1``),
+    which routes the Responses API. The mlflow path only exposes Chat Completions.
+    """
+    return OpenAI(api_key=get_databricks_token(), base_url=config.responses_base_url)
 
 
 # ---------------------------------------------------------------------------
@@ -393,14 +435,23 @@ for msg in messages:
                 f"<span class='crystal-attach-pill'>📎 {a}</span>" for a in msg["attachments"]
             )
             st.markdown(attach_html, unsafe_allow_html=True)
-        st.markdown(msg["content"])
+        render_message_content(msg["content"])
 
 # ---------------------------------------------------------------------------
 # Sticky bottom toolbar: paperclip popover + pending-files indicator
 # (Sits just above the chat input thanks to position:sticky in styles.css.)
 # ---------------------------------------------------------------------------
+image_capable = config.supports_images(st.session_state.selected_endpoint)
+if not image_capable:
+    # The toggle is meaningless for non-image endpoints (e.g. Claude).
+    st.session_state.image_mode = False
+
 st.markdown("<div class='crystal-bottom-bar'>", unsafe_allow_html=True)
-bcol_attach, bcol_status = st.columns([1, 9])
+if image_capable:
+    bcol_attach, bcol_img, bcol_status = st.columns([1, 2, 7])
+else:
+    bcol_attach, bcol_status = st.columns([1, 9])
+    bcol_img = None
 with bcol_attach:
     with st.popover("📎", help="Adjuntar archivo"):
         st.caption("Adjunta hasta 5 archivos (PDF, Word, Excel, texto o imagen).")
@@ -418,12 +469,25 @@ with bcol_attach:
         )
         if uploaded:
             st.session_state.pending_attachments = uploaded
+if bcol_img is not None:
+    with bcol_img:
+        st.session_state.image_mode = st.toggle(
+            "🎨 Imagen",
+            value=st.session_state.image_mode,
+            help="Genera una imagen a partir de tu mensaje (modelos OpenAI).",
+        )
 with bcol_status:
     if st.session_state.pending_attachments:
         names = ", ".join(f.name for f in st.session_state.pending_attachments)
         st.markdown(
             f"<div style='color:#6E6E6E; font-size:0.82rem; padding-top:0.55rem;'>"
             f"Listo para enviar: <b>{names}</b></div>",
+            unsafe_allow_html=True,
+        )
+    elif st.session_state.image_mode:
+        st.markdown(
+            "<div style='color:#6E6E6E; font-size:0.82rem; padding-top:0.55rem;'>"
+            "Modo imagen activo — describe la imagen que quieres.</div>",
             unsafe_allow_html=True,
         )
 st.markdown("</div>", unsafe_allow_html=True)
@@ -442,7 +506,7 @@ if prompt:
 
     # Build user message content: text + extracted file content
     extracted_parts: list[str] = []
-    image_parts: list[dict] = []
+    image_data_uris: list[str] = []
     for f in attachments:
         result = extract_file_content(f)
         if result["kind"] == "text":
@@ -450,12 +514,12 @@ if prompt:
                 f"\n\n--- Archivo adjunto: {f.name} ---\n{result['text']}\n--- Fin del archivo ---"
             )
         elif result["kind"] == "image":
-            image_parts.append(
-                {
-                    "type": "image_url",
-                    "image_url": {"url": f"data:{result['mime']};base64,{result['b64']}"},
-                }
-            )
+            image_data_uris.append(f"data:{result['mime']};base64,{result['b64']}")
+
+    # Chat Completions vision payload shape (image_url object).
+    image_parts = [
+        {"type": "image_url", "image_url": {"url": uri}} for uri in image_data_uris
+    ]
 
     display_text = prompt
     api_text = prompt + "".join(extracted_parts)
@@ -481,65 +545,172 @@ if prompt:
             st.markdown(attach_html, unsafe_allow_html=True)
         st.markdown(display_text)
 
-    # Build OpenAI-format message list from history
-    api_messages = []
-    for m in store.list_messages(conversation_id):
-        if m["role"] == "user" and m["id"] == store.last_message_id(conversation_id):
-            if image_parts:
-                api_messages.append(
-                    {
-                        "role": "user",
-                        "content": [{"type": "text", "text": api_text}, *image_parts],
-                    }
-                )
-            else:
-                api_messages.append({"role": "user", "content": api_text})
-        else:
-            api_messages.append({"role": m["role"], "content": m["content"]})
+    endpoint = st.session_state.selected_endpoint
+    last_user_id = store.last_message_id(conversation_id)
+    image_model = config.image_model_for(endpoint)
+    use_responses = bool(image_model) and st.session_state.image_mode
 
-    # Call the model
     with st.chat_message("assistant", avatar="static/logo.png"):
         placeholder = st.empty()
+        # `stored_content` is what we persist (may embed image markers);
+        # the live render happens inline below.
+        stored_content = ""
         try:
-            client = get_llm_client()
-            full_response = ""
-            stream = client.chat.completions.create(
-                model=st.session_state.selected_endpoint,
-                messages=api_messages,
-                max_tokens=config.max_tokens,
-                stream=True,
-            )
-            for chunk in stream:
-                if not getattr(chunk, "choices", None):
-                    continue
-                delta = chunk.choices[0].delta.content
-                if not delta:
-                    continue
-                if isinstance(delta, list):
-                    delta = "".join(
-                        part.get("text", "")
-                        for part in delta
-                        if isinstance(part, dict) and part.get("type") == "text"
+            if use_responses:
+                # ---- Responses API path: streaming image generation ----
+                # Through the AI Gateway OpenAI-compatible path, targeting the
+                # configured OpenAI serving endpoint (image_model). Streaming with
+                # partial_images sidesteps the synchronous ~640 KB cap, renders the
+                # image progressively, and surfaces real upstream errors.
+                responses_input = []
+                for m in store.list_messages(conversation_id):
+                    if m["role"] == "user" and m["id"] == last_user_id:
+                        content_list = [{"type": "input_text", "text": api_text}]
+                        for uri in image_data_uris:
+                            content_list.append({"type": "input_image", "image_url": uri})
+                        responses_input.append({"role": "user", "content": content_list})
+                    else:
+                        responses_input.append(
+                            {"role": m["role"], "content": strip_image_markers(m["content"])}
+                        )
+
+                client = get_responses_client()
+                img_placeholder = st.empty()
+                text_out = ""
+                final_image_b64 = None
+                stream_error = None
+                # Image generation also spends output tokens on reasoning, so
+                # give it a generous floor to avoid truncating before the image.
+                with st.spinner("Generando imagen…"):
+                    stream = client.responses.create(
+                        model=image_model,
+                        input=responses_input,
+                        max_output_tokens=max(config.max_tokens, 4096),
+                        tools=[config.image_tool()],
+                        tool_choice="auto",
+                        stream=True,
                     )
-                elif not isinstance(delta, str):
-                    delta = str(delta)
-                if not delta:
-                    continue
-                full_response += delta
-                placeholder.markdown(full_response + "▌")
-            placeholder.markdown(full_response)
+                    for event in stream:
+                        etype = getattr(event, "type", "") or ""
+                        if etype == "response.output_text.delta":
+                            text_out += getattr(event, "delta", "") or ""
+                            if text_out:
+                                placeholder.markdown(text_out + "▌")
+                        elif etype == "response.image_generation_call.partial_image":
+                            b64 = getattr(event, "partial_image_b64", None)
+                            if b64:
+                                final_image_b64 = b64  # latest partial = best so far
+                                try:
+                                    img_placeholder.image(base64.b64decode(b64))
+                                except Exception:  # noqa: BLE001
+                                    pass
+                        elif etype == "response.completed":
+                            # Prefer the final, fully-rendered image if present.
+                            resp_obj = getattr(event, "response", None)
+                            for item in getattr(resp_obj, "output", None) or []:
+                                if getattr(item, "type", None) == "image_generation_call":
+                                    result = getattr(item, "result", None)
+                                    if result:
+                                        final_image_b64 = result
+                        elif etype in ("error", "response.failed"):
+                            # Error shape varies: "error" events nest .error.message
+                            # (gateway) or expose .message (SDK); "response.failed"
+                            # nests it under .response.error.message.
+                            err = getattr(event, "error", None)
+                            resp_err = getattr(getattr(event, "response", None), "error", None)
+                            stream_error = (
+                                getattr(err, "message", None)
+                                or getattr(resp_err, "message", None)
+                                or getattr(event, "message", None)
+                                or str(err or resp_err or etype)
+                            )
+
+                if stream_error:
+                    raise RuntimeError(stream_error)
+
+                if text_out:
+                    placeholder.markdown(text_out)
+                else:
+                    placeholder.empty()
+                if final_image_b64:
+                    img_placeholder.image(base64.b64decode(final_image_b64))
+
+                stored_content = text_out + (
+                    f"\n\n[[crystal-image:{final_image_b64}]]" if final_image_b64 else ""
+                )
+                if not stored_content.strip():
+                    stored_content = "_(El modelo no devolvió una imagen.)_"
+                    placeholder.markdown(stored_content)
+            else:
+                # ---- Chat Completions path (streaming) ----
+                api_messages = []
+                for m in store.list_messages(conversation_id):
+                    if m["role"] == "user" and m["id"] == last_user_id:
+                        if image_parts:
+                            api_messages.append(
+                                {
+                                    "role": "user",
+                                    "content": [{"type": "text", "text": api_text}, *image_parts],
+                                }
+                            )
+                        else:
+                            api_messages.append({"role": "user", "content": api_text})
+                    else:
+                        api_messages.append({"role": m["role"], "content": m["content"]})
+
+                client = get_llm_client()
+                full_response = ""
+                stream = client.chat.completions.create(
+                    model=endpoint,
+                    messages=api_messages,
+                    max_tokens=config.max_tokens,
+                    stream=True,
+                )
+                for chunk in stream:
+                    if not getattr(chunk, "choices", None):
+                        continue
+                    delta = chunk.choices[0].delta.content
+                    if not delta:
+                        continue
+                    if isinstance(delta, list):
+                        delta = "".join(
+                            part.get("text", "")
+                            for part in delta
+                            if isinstance(part, dict) and part.get("type") == "text"
+                        )
+                    elif not isinstance(delta, str):
+                        delta = str(delta)
+                    if not delta:
+                        continue
+                    full_response += delta
+                    placeholder.markdown(full_response + "▌")
+                placeholder.markdown(full_response)
+                stored_content = full_response
         except Exception as exc:  # noqa: BLE001
-            full_response = (
-                f"⚠️ No se pudo obtener respuesta del endpoint "
-                f"`{st.session_state.selected_endpoint}`.\n\n```\n{exc}\n```"
-            )
-            placeholder.markdown(full_response)
+            if use_responses:
+                # Image generation can fail upstream (the synchronous path wraps
+                # the provider error as a generic 400). Show a friendly message
+                # and keep the technical detail tucked away for debugging.
+                stored_content = (
+                    "⚠️ No se pudo generar la imagen en este momento. "
+                    "El servicio de generación de imágenes puede estar temporalmente "
+                    "no disponible — intenta de nuevo en unos minutos."
+                )
+                placeholder.markdown(stored_content)
+                with st.expander("Detalle técnico"):
+                    st.code(str(exc))
+            else:
+                stored_content = (
+                    f"⚠️ No se pudo obtener respuesta del endpoint "
+                    f"`{endpoint}`.\n\n```\n{exc}\n```"
+                )
+                placeholder.markdown(stored_content)
 
     # Persist assistant message
     store.add_message(
         conversation_id=conversation_id,
         role="assistant",
-        content=full_response,
+        content=stored_content,
         attachments=[],
     )
 

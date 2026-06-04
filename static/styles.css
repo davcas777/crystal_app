@@ -171,14 +171,28 @@ section[data-testid="stSidebar"] .stButton > button[kind="secondary"]:has(*:cont
     margin: 0.1rem 0 0.4rem 0;
     gap: 0.75rem;
 }
-/* Slim down the avatar */
+/* Slim down the avatar — scope the 26px sizing to the avatar containers ONLY,
+   otherwise it also shrinks generated/attached images down to a tiny circle. */
 [data-testid="stChatMessage"] [data-testid="chatAvatarIcon-user"],
 [data-testid="stChatMessage"] [data-testid="chatAvatarIcon-assistant"],
-[data-testid="stChatMessage"] img {
+[data-testid="stChatMessage"] [data-testid="chatAvatarIcon-user"] img,
+[data-testid="stChatMessage"] [data-testid="chatAvatarIcon-assistant"] img {
     width: 26px !important;
     height: 26px !important;
     border-radius: 999px;
     flex-shrink: 0;
+}
+
+/* Generated / content images (st.image) render at a readable size, not the
+   avatar size. Cap the width so a 1024px image fits the chat column nicely. */
+[data-testid="stChatMessage"] [data-testid="stImage"] img,
+[data-testid="stChatMessage"] [data-testid="stImageContainer"] img,
+[data-testid="stChatMessage"] [data-testid="stFullScreenFrame"] img {
+    width: auto !important;
+    height: auto !important;
+    max-width: min(560px, 100%) !important;
+    border-radius: 12px;
+    flex-shrink: 1;
 }
 /* Make user/assistant text containers feel airy */
 [data-testid="stChatMessage"] [data-testid="stChatMessageContent"] {
